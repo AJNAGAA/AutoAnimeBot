@@ -34,7 +34,7 @@ from libs.subsplease import SubsPlease
 
 tools = Tools()
 tools.init_dir()
-bot = Bot(None)
+bot = Bot()
 dB = DataBase()
 subsplease = SubsPlease(dB)
 torrent = Torrent()
@@ -48,8 +48,26 @@ admin = AdminUtils(dB, bot)
     )
 )
 async def _start(event):
-    msg_id = event.pattern_match.group(1)
     xnx = await event.reply("`Please Wait...`")
+    msg_id = event.pattern_match.group(1)
+    dB.add_broadcast_user(event.sender_id)
+    if Var.FORCESUB_CHANNEL and Var.FORCESUB_CHANNEL_LINK:
+        is_user_joined = await bot.is_joined(Var.FORCESUB_CHANNEL, event.sender_id)
+        if is_user_joined:
+            pass
+        else:
+            return await xnx.edit(
+                f"**Please Join The Following Channel To Use This Bot 🫡**",
+                buttons=[
+                    [Button.url("🚀 JOIN CHANNEL", url=Var.FORCESUB_CHANNEL_LINK)],
+                    [
+                        Button.url(
+                            "♻️ REFRESH",
+                            url=f"https://t.me/{((await bot.get_me()).username)}?start={msg_id}",
+                        )
+                    ],
+                ],
+            )
     if msg_id:
         if msg_id.isdigit():
             msg = await bot.get_messages(Var.BACKUP_CHANNEL, ids=int(msg_id))
@@ -62,8 +80,7 @@ async def _start(event):
                     await event.reply(file=[i for i in msg])
     else:
         if event.sender_id == Var.OWNER:
-            await xnx.delete()
-            return await event.reply(
+            return await xnx.edit(
                 "** <                ADMIN PANEL                 > **",
                 buttons=admin.admin_panel(),
             )
@@ -107,6 +124,16 @@ async def _(e):
     await admin._btn_t(e)
 
 
+@bot.on(events.callbackquery.CallbackQuery(data="scul"))
+async def _(e):
+    await admin._sep_c_t(e)
+
+
+@bot.on(events.callbackquery.CallbackQuery(data="cast"))
+async def _(e):
+    await admin.broadcast_bt(e)
+
+
 @bot.on(events.callbackquery.CallbackQuery(data="bek"))
 async def _(e):
     await e.edit(buttons=admin.admin_panel())
@@ -114,9 +141,25 @@ async def _(e):
 
 async def anime(data):
     try:
-        torr = [data.get("720p"), data.get("1080p")]
-        poster = await tools._poster(bot, AnimeInfo(torr[0].title))
-        btn = []
+        torr = [data.get("480p"), data.get("720p"), data.get("1080p")]
+        anime_info = AnimeInfo(torr[0].title)
+        poster = await tools._poster(bot, anime_info)
+        if dB.is_separate_channel_upload():
+            chat_info = await tools.get_chat_info(bot, anime_info, dB)
+            await poster.edit(
+                buttons=[
+                    [
+                        Button.url(
+                            f"EPISODE {anime_info.data.get('episode_number', '')}".strip(),
+                            url=chat_info["invite_link"],
+                        )
+                    ]
+                ]
+            )
+            poster = await tools._poster(bot, anime_info, chat_info["chat_id"])
+        btn = [[]]
+        original_upload = dB.is_original_upload()
+        button_upload = dB.is_button_upload()
         for i in torr:
             try:
                 filename = f"downloads/{i.title}"
@@ -127,8 +170,8 @@ async def anime(data):
                     bot,
                     dB,
                     {
-                        "original_upload": dB.is_original_upload(),
-                        "button_upload": dB.is_button_upload(),
+                        "original_upload": original_upload,
+                        "button_upload": button_upload,
                     },
                     filename,
                     AnimeInfo(i.title),
@@ -137,8 +180,11 @@ async def anime(data):
                 result, _btn = await exe.execute()
                 if result:
                     if _btn:
-                        btn.append(_btn)
-                        await poster.edit(buttons=[btn])
+                        if len(btn[0]) == 2:
+                            btn.append([_btn])
+                        else:
+                            btn[0].append(_btn)
+                        await poster.edit(buttons=btn)
                     asyncio.ensure_future(exe.further_work())
                     continue
                 await reporter.report_error(_btn, log=True)

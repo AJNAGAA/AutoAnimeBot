@@ -25,13 +25,13 @@ class RawAnimeInfo:
         self.anilist = Anilist()
 
     async def search(self, query: str):
-        raw_data = (await self.searcher(query)).get("data", {})
+        raw_data = ((await self.searcher(query)) or {}).get("data") or {}
         try:
             _raw_data = await self.search_anilist(raw_data.get("id"))
         except BaseException:
             _raw_data = {}
         if not raw_data:
-            data = self.alt_anilist(query)
+            data = {}  # self.alt_anilist(query)
             return data
         data = {}
         data["anime_id"] = raw_data.get("id")
@@ -50,7 +50,7 @@ class RawAnimeInfo:
         # data["score"] = raw_data.get("attributes", {}).get("averageRating") or "N/A"
         data["type"] = raw_data.get("attributes", {}).get("showType") or "TV"
         data["runtime"] = raw_data.get("attributes", {}).get("episodeLength") or 24
-        return {**data, **_raw_data}
+        return {**(data if data else {}), **(_raw_data if _raw_data else {})}
 
     async def searcher(
         self,
@@ -64,6 +64,8 @@ class RawAnimeInfo:
                 links = (await data.json())["data"]
                 for index in range(len(links)):
                     res_data = await self.re_searcher(links[index]["links"]["self"])
+                    if res_data["data"]["attributes"]["status"] == "tba":
+                        continue
                     if "current" != res_data["data"]["attributes"]["status"]:
                         if (
                             res_data["data"]["attributes"]["endDate"]

@@ -16,11 +16,9 @@
 # if you are using this following code then don't forgot to give proper
 # credit to t.me/kAiF_00z (github.com/kaif-00z)
 
-import re
-from datetime import datetime
+from traceback import format_exc
 
 import anitopy
-import pytz
 
 from libs.kitsu import RawAnimeInfo
 from libs.logger import LOGS
@@ -30,16 +28,13 @@ class AnimeInfo:
     def __init__(self, name):
         self.kitsu = RawAnimeInfo()
         self.CAPTION = """
-**〄 {} • {}
+**{}
 ━━━━━━━━━━━━━━━
-⬡ Quality: 720p, 1080p
-⬡ Audio: Japanese [English Subtitles]
-⬡ Genres: {}
-━━━━━━━━━━━━━━━
-〣 Next Airing Episode: {}
-〣 Next Airing Episode Date: {}
-━━━━━━━━━━━━━━━**
-〣 #{}
+‣ Language:** `Japanese [ESub]`
+**‣ Quality:** `480p|720p|1080p`
+**‣ Season:** `{}`
+**‣ Episode:** `{}`
+**━━━━━━━━━━━━━━━**
 """
         self.proper_name = self.get_proper_name_for_func(name)
         self.name = name
@@ -48,10 +43,10 @@ class AnimeInfo:
     async def get_english(self):
         anime_name = self.data.get("anime_title")
         try:
-            anime = await self.kitsu.search(self.proper_name)
-            return anime.get("english_title").strip() or anime_name
-        except Exception as error:
-            LOGS.error(str(error))
+            anime = (await self.kitsu.search(self.proper_name)) or {}
+            return anime.get("english_title") or anime_name
+        except BaseException:
+            LOGS.error(str(format_exc()))
             return anime_name.strip()
 
     async def get_poster(self):
@@ -59,8 +54,8 @@ class AnimeInfo:
             if self.proper_name:
                 anime_poster = await self.kitsu.search(self.proper_name)
                 return anime_poster.get("poster_img") or None
-        except Exception as error:
-            LOGS.error(str(error))
+        except BaseException:
+            LOGS.error(str(format_exc()))
 
     async def get_cover(self):
         try:
@@ -69,30 +64,23 @@ class AnimeInfo:
                 if anime_poster.get("anilist_id"):
                     return anime_poster.get("anilist_poster")
                 return None
-        except Exception as error:
-            LOGS.error(str(error))
+        except BaseException:
+            LOGS.error(str(format_exc()))
 
     async def get_caption(self):
         try:
-            if self.proper_name:
-                anime = await self.kitsu.search(self.proper_name)
-                next_ = anime.get("next_airing_ep", {})
+            if self.proper_name or self.data:
                 return self.CAPTION.format(
-                    anime.get("english_title").strip() or self.data.get("anime_title"),
-                    anime.get("type"),
-                    ", ".join(anime.get("genres")),
-                    next_.get("episode") or "N/A",
+                    (await self.get_english()),
+                    str(self.data.get("anime_season") or 1).zfill(2),
                     (
-                        datetime.fromtimestamp(
-                            next_.get("airingAt"), tz=pytz.timezone("Asia/Kolkata")
-                        ).strftime("%A, %B %d, %Y")
-                        if next_.get("airingAt")
+                        str(self.data.get("episode_number")).zfill(2)
+                        if self.data.get("episode_number")
                         else "N/A"
                     ),
-                    "".join(re.split("[^a-zA-Z]*", anime.get("english_title") or "")),
                 )
-        except Exception as error:
-            LOGS.error(str(error))
+        except BaseException:
+            LOGS.error(str(format_exc()))
             return ""
 
     async def rename(self, original=False):
@@ -100,7 +88,7 @@ class AnimeInfo:
             anime_name = self.data.get("anime_title")
             if anime_name and self.data.get("episode_number"):
                 return (
-                    f"[S{self.data.get('anime_season') or 1}-{self.data.get('episode_number') or ''}] {(await self.get_english())} [{self.data.get('video_resolution').replace('p', 'px264' if original else 'px265') or ''}].mkv".replace(
+                    f"[S{self.data.get('anime_season') or 1}-{self.data.get('episode_number') or ''}] {(await self.get_english())} [{self.data.get('video_resolution')}].mkv".replace(
                         "‘", ""
                     )
                     .replace("’", "")
@@ -108,7 +96,7 @@ class AnimeInfo:
                 )
             if anime_name:
                 return (
-                    f"{(await self.get_english())} [{self.data.get('video_resolution').replace('p', 'px264' if original else 'px265') or ''}].mkv".replace(
+                    f"{(await self.get_english())} [{self.data.get('video_resolution')}].mkv".replace(
                         "‘", ""
                     )
                     .replace("’", "")
@@ -117,6 +105,7 @@ class AnimeInfo:
             return self.name
         except Exception as error:
             LOGS.error(str(error))
+            LOGS.exception(format_exc())
             return self.name
 
     def get_proper_name_for_func(self, name):
@@ -136,3 +125,4 @@ class AnimeInfo:
             return anime_name
         except Exception as error:
             LOGS.error(str(error))
+            LOGS.exception(format_exc())
